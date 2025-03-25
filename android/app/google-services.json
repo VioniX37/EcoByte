@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "375386852980",
+    "project_id": "e-waste-3af7e",
+    "storage_bucket": "e-waste-3af7e.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:375386852980:android:c31347d1e4fa44361acb21",
+        "android_client_info": {
+          "package_name": "com.example.ewaste_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD0pHNV1Aq2Af-ZcQDSQ_aJ7UYKwjrqWT4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
