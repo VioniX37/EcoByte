@@ -1,160 +1,111 @@
 # EcoByte
 
-EcoByte is a Flutter application focused on reducing electronic waste through reuse, resale, education, and community participation.
+Last updated: 2026-05-30
 
-This upgraded version is Supabase-first (auth, database, and storage) and is ready to run across Android, iOS, and Web.
+EcoByte is a cross-platform Flutter app that helps reduce electronic waste through reuse, resale, education, and community participation. This repository is Supabase-first (auth, database, and storage) and targets Android, iOS, Web and desktop platforms.
+
+## Quick Links
+
+- Documentation: [CONTRIBUTING.md](CONTRIBUTING.md)
+- Changelog: [CHANGELOG.md](CHANGELOG.md)
+
+## One-line start
+
+1. Copy `.env.example` to `.env` and set required keys. 2. Run `flutter pub get`. 3. Run `flutter run`.
 
 ## Core Features
 
-- Authentication and profile onboarding (Supabase Auth + profile bootstrap)
-- Email verification gate before full app access
-- Forgot password and secure reset flow
-- Community feed (posts, likes, media uploads)
-- Marketplace (list, browse, and manage reusable electronics)
-- Recycling map (location-aware recycler discovery)
-- Daily quiz and score tracking
+- Supabase-backed authentication and profiles
+- Email verification and password reset flows
+- Community feed with media uploads and likes
+- Marketplace for listing and browsing reusable electronics
+- Location-aware recycling map
+- Daily quiz and scoring
 - AI assistant for repair/recycling guidance
-- Theme-aware premium UI flow
 
-## Tech Stack
+## Supported Platforms
 
-- Flutter (Dart)
-- Supabase Auth
-- Supabase Postgres
-- Supabase Storage
-- Google / Gemini APIs for AI and search enrichment
+- Android, iOS, Web, macOS, Linux, Windows (via Flutter platform folders)
 
-## Project Structure
+## Requirements & Prerequisites
 
-```text
-EcoByte/
-	lib/
-		app/                  # shared state, repositories, reusable widgets
-		pages/                # feature screens (auth, home, map, community, buy/sell, quiz)
-		main.dart             # app bootstrap
-	assets/                 # images/icons (including vionix branding asset)
-	supabase/migrations/    # SQL migrations and policies
-	web/                    # web manifest and bootstrap HTML
-	android/, ios/, linux/, macos/, windows/  # platform runners
-	test/                   # widget tests
-```
+- Flutter SDK (stable channel recommended)
+- Android Studio (or Android SDK) for Android builds
+- Xcode for iOS builds (macOS only)
+- A Supabase project with the expected schema and storage bucket
 
-## Prerequisites
+## Environment variables
 
-- Flutter SDK (stable channel)
-- Dart SDK (bundled with Flutter)
-- Supabase project with required schema
-- Android Studio / Xcode (for mobile builds)
-
-## Environment Setup
-
-1. Copy `.env.example` to `.env`.
-2. Fill all required values:
+Copy `.env.example` to `.env` and set the values below before running locally:
 
 ```env
-GOOGLE_API_KEY=...
-SEARCH_ENGINE_ID=...
-GEMINI_API_KEY=...
-SUPABASE_URL=...
-SUPABASE_ANON_KEY=...
-SUPABASE_RESET_PASSWORD_REDIRECT_TO=...   # optional but recommended
+GOOGLE_API_KEY=
+SEARCH_ENGINE_ID=
+GEMINI_API_KEY=
+SUPABASE_URL=
+SUPABASE_ANON_KEY=
+SUPABASE_RESET_PASSWORD_REDIRECT_TO=
 ```
 
-For password reset on mobile, configure a deep link redirect URL in Supabase and set it in `SUPABASE_RESET_PASSWORD_REDIRECT_TO`.
+Note: Do not commit `.env` or any secrets to the repository.
 
-## Supabase Requirements
+## Supabase: expected schema & storage
 
-The app expects these tables:
+Tables (examples): `profiles`, `products`, `messages`, `message_likes`, `quiz_sets`, `quiz_questions`, `quiz_attempts`.
 
-- `profiles`
-- `products`
-- `messages`
-- `message_likes`
-- `quiz_sets`
-- `quiz_questions`
-- `quiz_attempts`
+Storage buckets: `uploads` (public read, authenticated write/delete per policy).
 
-Storage bucket:
+Apply the SQL migrations and RLS policies in `supabase/migrations/` before first run.
 
-- `uploads` (public read, authenticated write/delete per policy)
+## Development: run locally
 
-Apply migration/policy scripts from `supabase/migrations/` before first run.
-
-## Run Locally
-
-Install dependencies:
+Install packages:
 
 ```bash
 flutter pub get
 ```
 
-Run on default device:
+Run on the default device/emulator:
 
 ```bash
 flutter run
 ```
 
-Run on web:
+Run on web (Chrome):
 
 ```bash
 flutter run -d chrome
 ```
 
-Build web release:
+Run unit/widget tests:
 
 ```bash
-flutter build web --release
+flutter test
 ```
 
-Build Android APK:
+Format and analyze:
+
+```bash
+dart format .
+dart analyze
+```
+
+Build release artifacts:
 
 ```bash
 flutter build apk --release
+flutter build web --release
+flutter build ios --release   # macOS only
 ```
 
-## Web Readiness Notes
+## Project structure (high level)
 
-- `web/index.html` has EcoByte metadata (title + description).
-- `web/manifest.json` is configured with EcoByte naming and branding colors.
-- The app is configured as a PWA-style installable web app through Flutter's manifest flow.
+lib/
+- `app/` - shared state, repositories, and utilities
+- `pages/` - feature screens (auth, home, map, marketplace, quiz, AI)
+- `main.dart` - application bootstrap
 
-## Upgrade Notes
-
-- Firebase dependencies/config have been removed from active app flows.
-- Supabase repository helpers now drive auth, profile data, uploads, and core feature reads/writes.
-- Existing UI/feature behavior has been preserved while modernizing data layer integration.
-
-## About Screen and Branding
-
-- The app includes an **About** page available in dropdown menus directly above **Logout**.
-- The About screen introduces the application and credits **VioniX** as the builder.
-- Branding asset expected: `assets/vionix.png`.
-
-## License and Usage
-
-This repository is distributed under a **non-commercial, personal-use-only** license.
-
-- Cloning for personal setup/run is allowed.
-- Commercial use, resale, sublicensing, redistribution, and unauthorized reuse are prohibited.
-
-See `LICENSE` for full terms.
-
-## Production Gap Review (Current)
-
-The app is strong functionally, but for production-grade maturity it still needs:
-
-1. Full account recovery flow
-2. Email verification and stronger auth guardrails
-3. Role-based access control and stricter row-level policies audit
-4. End-to-end automated test suite (critical journeys)
-5. Crash/error monitoring (Sentry, Crashlytics, or equivalent)
-6. Structured analytics and event instrumentation
-7. Rate limiting / abuse protection on write-heavy flows
-8. Better offline/poor-network behavior and sync conflict handling
-9. Data retention/privacy policy and legal compliance pages
-10. In-app support/contact and incident response process
-11. CI/CD pipelines with automated quality gates
-12. Formal release versioning/changelog discipline
+Other folders: `assets/`, `supabase/` (migrations), `web/`, `android/`, `ios/`, `windows/`, `macos/`, `linux/`, `test/`
 
 ## Immediate Priority Backlog
 
@@ -164,11 +115,56 @@ The app is strong functionally, but for production-grade maturity it still needs
 4. Test coverage for auth, posting, listing, and quiz flows
 5. Production monitoring/alerting integration
 
+These are prioritized for stability and production readiness. See `CONTRIBUTING.md` for how to contribute fixes and add tests.
+
+## Production gap summary
+
+Areas to address before production:
+
+- End-to-end test coverage for critical user journeys
+- Role-based access control and row-level security audit
+- Crash/error monitoring and structured analytics
+- Data retention & privacy policy artifacts
+- CI/CD pipelines and release gating
+
 ## Troubleshooting
 
 - If `flutter pub get` fails on Windows due to symlink restrictions, enable Developer Mode.
 - If uploads fail with 401/403, verify Supabase storage bucket policies were applied.
 - If map data is empty, verify RPC/table permissions used by recycler lookup.
+
+## Repository maintenance (sync steps)
+
+Run these locally to bring your workspace up to date after changes:
+
+```bash
+git fetch --all --prune
+git status
+flutter pub get
+dart format .
+dart analyze
+flutter test
+```
+
+To inspect outdated packages:
+
+```bash
+flutter pub outdated
+```
+
+When upgrading packages, do it in small batches and run `dart analyze` + `flutter test` after each upgrade.
+
+## Contributing
+
+See `CONTRIBUTING.md` for branch, commit, and PR guidelines.
+
+## Changelog
+
+See `CHANGELOG.md` for release notes and change history.
+
+## License
+
+This repository is distributed under the terms in `LICENSE` (non-commercial, personal-use-only). See that file for details.
 
 ## Maintainer
 
