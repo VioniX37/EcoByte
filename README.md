@@ -7,6 +7,8 @@ This upgraded version is Supabase-first (auth, database, and storage) and is rea
 ## Core Features
 
 - Authentication and profile onboarding (Supabase Auth + profile bootstrap)
+- Email verification gate before full app access
+- Forgot password and secure reset flow
 - Community feed (posts, likes, media uploads)
 - Marketplace (list, browse, and manage reusable electronics)
 - Recycling map (location-aware recycler discovery)
@@ -55,7 +57,10 @@ SEARCH_ENGINE_ID=...
 GEMINI_API_KEY=...
 SUPABASE_URL=...
 SUPABASE_ANON_KEY=...
+SUPABASE_RESET_PASSWORD_REDIRECT_TO=...   # optional but recommended
 ```
+
+For password reset on mobile, configure a deep link redirect URL in Supabase and set it in `SUPABASE_RESET_PASSWORD_REDIRECT_TO`.
 
 ## Supabase Requirements
 

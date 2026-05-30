@@ -31,7 +31,7 @@ class Textfield extends StatelessWidget {
             labelText: label,
             labelStyle: TextStyle(color: scheme.onSurfaceVariant),
             filled: true,
-            fillColor: scheme.surface.withOpacity(0.6),
+            fillColor: scheme.surface.withValues(alpha: 0.6),
             border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(15),
                 borderSide: BorderSide(color: scheme.outline, width: 1.5)),

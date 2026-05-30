@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:e_waste/app/data/supabase_repository.dart';
 import 'package:e_waste/app/widgets/premium_mode_ui.dart';
 import 'package:e_waste/app/widgets/theme_toggle_icon_button.dart';
+import 'package:e_waste/pages/auth/forgot_password_screen.dart';
 import 'package:e_waste/pages/auth/signup_screen.dart';
 import 'package:e_waste/pages/auth/widgets/textfield.dart';
 import 'package:e_waste/pages/main_screen.dart';
@@ -39,10 +40,39 @@ class _LoginScreenState extends State<LoginScreen> {
     });
 
     try {
-      await SupabaseRepository.client.auth.signInWithPassword(
+      final response = await SupabaseRepository.client.auth.signInWithPassword(
         email: emailController.text.trim(),
         password: passwordController.text,
       );
+
+      final user = response.user;
+      final isVerified = user?.emailConfirmedAt != null;
+
+      if (!isVerified) {
+        await SupabaseRepository.client.auth.signOut();
+        if (!mounted) {
+          return;
+        }
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Verify your email before signing in.'),
+            action: SnackBarAction(
+              label: 'Resend',
+              onPressed: () async {
+                try {
+                  await SupabaseRepository.client.auth.resend(
+                    type: OtpType.signup,
+                    email: emailController.text.trim(),
+                  );
+                } catch (_) {}
+              },
+            ),
+          ),
+        );
+        return;
+      }
+
       await SupabaseRepository.ensureCurrentProfileExists();
 
       if (!mounted) {
@@ -196,6 +226,21 @@ class _LoginScreenState extends State<LoginScreen> {
                               validator: (value) => value == null || value.isEmpty
                                   ? 'Please enter your password'
                                   : null,
+                            ),
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: TextButton(
+                                onPressed: _isLoading
+                                    ? null
+                                    : () {
+                                        Navigator.of(context).push(
+                                          MaterialPageRoute(
+                                            builder: (ctx) => const ForgotPasswordScreen(),
+                                          ),
+                                        );
+                                      },
+                                child: const Text('Forgot password?'),
+                              ),
                             ),
                             const SizedBox(height: 16),
                             ElevatedButton(

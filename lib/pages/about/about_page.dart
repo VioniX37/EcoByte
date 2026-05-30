@@ -1,4 +1,5 @@
 import 'package:e_waste/app/widgets/premium_ui.dart';
+import 'package:e_waste/pages/about/terms_and_conditions_page.dart';
 import 'package:flutter/material.dart';
 
 class AboutPage extends StatelessWidget {
@@ -107,6 +108,22 @@ class AboutPage extends StatelessWidget {
                     'EcoByte is designed and engineered by VioniX with a focus on practical climate impact, clean user experience, and real-world digital sustainability workflows.',
                     style: textTheme.bodyMedium?.copyWith(height: 1.6),
                   ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Support and contact',
+                    style: textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      color: scheme.primary,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  SelectableText(
+                    'vionix37@gmail.com',
+                    style: textTheme.bodyLarge?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: scheme.onSurface,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -127,6 +144,17 @@ class AboutPage extends StatelessWidget {
                   Text(
                     'Upgraded edition (Supabase-first architecture)',
                     style: textTheme.bodyMedium,
+                  ),
+                  const SizedBox(height: 12),
+                  FilledButton.tonal(
+                    onPressed: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (ctx) => const TermsAndConditionsPage(),
+                        ),
+                      );
+                    },
+                    child: const Text('View Terms and Conditions'),
                   ),
                 ],
               ),

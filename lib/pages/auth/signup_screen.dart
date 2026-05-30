@@ -3,9 +3,9 @@ import 'dart:ui';
 import 'package:e_waste/app/data/supabase_repository.dart';
 import 'package:e_waste/app/widgets/premium_mode_ui.dart';
 import 'package:e_waste/app/widgets/theme_toggle_icon_button.dart';
+import 'package:e_waste/pages/about/terms_and_conditions_page.dart';
 import 'package:e_waste/pages/auth/login_screen.dart';
 import 'package:e_waste/pages/auth/widgets/textfield.dart';
-import 'package:e_waste/pages/main_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -25,6 +25,7 @@ class _SignupScreenState extends State<SignupScreen> {
   final TextEditingController addressController = TextEditingController();
   final formKey = GlobalKey<FormState>();
   bool _isLoading = false;
+  bool _acceptedTerms = false;
 
   @override
   void dispose() {
@@ -49,6 +50,13 @@ class _SignupScreenState extends State<SignupScreen> {
       return;
     }
 
+    if (!_acceptedTerms) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please accept the Terms and Conditions to continue.')),
+      );
+      return;
+    }
+
     setState(() {
       _isLoading = true;
     });
@@ -62,6 +70,8 @@ class _SignupScreenState extends State<SignupScreen> {
           'name': nameController.text.trim(),
           'phone': phoneController.text.trim(),
           'address': addressController.text.trim(),
+          'terms_accepted_at': DateTime.now().toUtc().toIso8601String(),
+          'terms_version': '1.0',
         },
       );
 
@@ -70,30 +80,25 @@ class _SignupScreenState extends State<SignupScreen> {
         throw const AuthException('Signup failed');
       }
 
+      await SupabaseRepository.client.auth.resend(
+        type: OtpType.signup,
+        email: emailController.text.trim(),
+      );
+
       if (response.session != null) {
-        await SupabaseRepository.ensureCurrentProfileExists();
+        await SupabaseRepository.client.auth.signOut();
       }
 
       if (!mounted) {
         return;
       }
 
-      if (response.session != null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Account created successfully!')),
-        );
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (ctx) => MainScreen()),
-          (route) => false,
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Check your email to verify the account, then sign in.'),
-          ),
-        );
-        Navigator.of(context).pop();
-      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Account created. Verify your email, then sign in.'),
+        ),
+      );
+      Navigator.of(context).pop();
     } on AuthException catch (e) {
       if (!mounted) {
         return;
@@ -263,6 +268,46 @@ class _SignupScreenState extends State<SignupScreen> {
                               validator: (value) => value == null || value.isEmpty
                                   ? 'Please confirm your password'
                                   : null,
+                            ),
+                            const SizedBox(height: 6),
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Checkbox(
+                                  value: _acceptedTerms,
+                                  onChanged: _isLoading
+                                      ? null
+                                      : (value) {
+                                          setState(() {
+                                            _acceptedTerms = value ?? false;
+                                          });
+                                        },
+                                ),
+                                Expanded(
+                                  child: Padding(
+                                    padding: const EdgeInsets.only(top: 12),
+                                    child: Wrap(
+                                      crossAxisAlignment: WrapCrossAlignment.center,
+                                      children: [
+                                        const Text('I agree to the '),
+                                        TextButton(
+                                          onPressed: _isLoading
+                                              ? null
+                                              : () {
+                                                  Navigator.of(context).push(
+                                                    MaterialPageRoute(
+                                                      builder: (ctx) =>
+                                                          const TermsAndConditionsPage(),
+                                                    ),
+                                                  );
+                                                },
+                                          child: const Text('Terms and Conditions'),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                             const SizedBox(height: 16),
                             ElevatedButton(
