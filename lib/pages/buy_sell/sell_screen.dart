@@ -1,346 +1,420 @@
+import 'dart:io';
+
+import 'package:dotted_border/dotted_border.dart';
+import 'package:e_waste/app/data/supabase_repository.dart';
+import 'package:e_waste/app/widgets/premium_mode_ui.dart';
+import 'package:e_waste/app/widgets/theme_toggle_icon_button.dart';
 import 'package:e_waste/pages/buy_sell/user_data.dart';
 import 'package:e_waste/pages/buy_sell/widgets/inputfield.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
-import 'dart:io';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:dotted_border/dotted_border.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-
-TextEditingController emailController = TextEditingController();
-TextEditingController nameController = TextEditingController();
-TextEditingController priceController = TextEditingController();
-TextEditingController phoneController = TextEditingController();
-TextEditingController descriptionController = TextEditingController();
-TextEditingController addressController = TextEditingController();
 
 class SellScreen extends StatefulWidget {
+  const SellScreen({super.key});
+
   @override
-  _SellScreenState createState() => _SellScreenState();
+  State<SellScreen> createState() => _SellScreenState();
 }
 
 class _SellScreenState extends State<SellScreen> {
+  final ImagePicker picker = ImagePicker();
+  final TextEditingController emailController = TextEditingController();
+  final TextEditingController nameController = TextEditingController();
+  final TextEditingController priceController = TextEditingController();
+  final TextEditingController phoneController = TextEditingController();
+  final TextEditingController descriptionController = TextEditingController();
+  final TextEditingController addressController = TextEditingController();
+  final GlobalKey<FormState> formKey = GlobalKey<FormState>();
+  late Future<Map<String, dynamic>?> userData;
   File? image;
   String? imageUrl;
-  final picker = ImagePicker();
-  FirebaseStorage storage = FirebaseStorage.instance;
-  FirebaseFirestore firestore = FirebaseFirestore.instance;
-  Future<Map<String, dynamic>?> userData = getUserDataSell();
+  final List<String> selectedTopics = [];
+  bool _isUploading = false;
 
-  // Function to pick an image from gallery
+  @override
+  void initState() {
+    super.initState();
+    userData = getUserDataSell();
+  }
+
+  @override
+  void dispose() {
+    emailController.dispose();
+    nameController.dispose();
+    priceController.dispose();
+    phoneController.dispose();
+    descriptionController.dispose();
+    addressController.dispose();
+    super.dispose();
+  }
+
   Future<void> _pickImage() async {
     final pickedFile = await picker.pickImage(source: ImageSource.gallery);
     if (pickedFile == null) return;
 
     setState(() {
       image = File(pickedFile.path);
+      _isUploading = true;
     });
 
-    String? uploadedImageUrl = await _uploadImage();
-    if (uploadedImageUrl != null) {
-      setState(() {
-        imageUrl = uploadedImageUrl;
-      });
-    }
-  }
-
-  // Function to upload the image to Firebase Storage
-  Future<String?> _uploadImage() async {
-    if (image == null) {
-      return null;
-    }
-    // User canceled image picking
-
-    final supabase = Supabase.instance.client;
-    final String fileName =
-        'uploads/${DateTime.now().millisecondsSinceEpoch}.png';
-
     try {
-      File file = File(image!.path);
+      final uploadedImageUrl = await SupabaseRepository.uploadFile(
+        file: image!,
+        bucket: 'uploads',
+        folder: 'products',
+      );
 
-      // Upload image to Supabase Storage
-      await supabase.storage.from('avatars').upload(fileName, file);
-
-      // Get the public URL of the uploaded image
-      final publicUrl = supabase.storage.from('avatars').getPublicUrl(fileName);
-
-      return publicUrl;
+      if (mounted) {
+        setState(() {
+          imageUrl = uploadedImageUrl;
+        });
+      }
     } catch (e) {
-      print('Upload error: $e');
-      return null;
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Product image upload failed: $e')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isUploading = false;
+        });
+      }
     }
   }
 
-  // Function to add product details to Firestore
-  Future<void> _addProductToFirestore() async {
-    if (imageUrl == null) {
+  Future<void> _addProduct() async {
+    if (!formKey.currentState!.validate()) {
       ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Please upload an image first.")));
+        const SnackBar(content: Text('Please fill in all fields')),
+      );
       return;
     }
 
-    CollectionReference products = firestore.collection('products');
-
-    await products.add({
-      'name': nameController.text,
-      'price': priceController.text,
-      'description': descriptionController.text,
-      'address': addressController.text,
-      'email': emailController.text,
-      'phone': phoneController.text,
-      'imageUrl': imageUrl,
-      'id': FirebaseAuth.instance.currentUser!.uid,
-      'createdAt': FieldValue.serverTimestamp(),
-      'topics': selectedTopics
-    });
-
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text("Product successfully added!")));
-    nameController.clear();
-    priceController.clear();
-    descriptionController.clear();
-
-    Navigator.of(context).pop();
-  }
-
-  List<String> selectedTopics = [];
-  final formKey = GlobalKey<FormState>();
-  void _submitForm() {
-    if (formKey.currentState!.validate()) {
-      // If all fields are valid
-      _addProductToFirestore();
-    } else {
+    if (imageUrl == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Please fill in all fields'),
-          backgroundColor: Colors.red,
-        ),
+        const SnackBar(content: Text('Please upload an image first.')),
       );
+      return;
+    }
+
+    final user = SupabaseRepository.client.auth.currentUser;
+    if (user == null) {
+      return;
+    }
+
+    final price = num.tryParse(priceController.text.trim());
+    if (price == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Enter a valid price')),
+      );
+      return;
+    }
+
+    try {
+      await SupabaseRepository.insertProduct(
+        userId: user.id,
+        name: nameController.text.trim(),
+        price: price,
+        description: descriptionController.text.trim(),
+        address: addressController.text.trim(),
+        email: emailController.text.trim(),
+        phone: phoneController.text.trim(),
+        imageUrl: imageUrl!,
+        topics: selectedTopics,
+      );
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Product successfully added!')),
+      );
+      Navigator.of(context).pop();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not upload product: $e')),
+        );
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder(
-        future: userData,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return Scaffold(
-              body: const Center(child: CircularProgressIndicator()),
-            ); // Show loading spinner
-          } else if (snapshot.hasError) {
-            return Center(child: Text("Error: ${snapshot.error}"));
-          } else if (!snapshot.hasData || snapshot.data == null) {
-            return const Center(child: Text("No data found"));
-          }
+    return FutureBuilder<Map<String, dynamic>?>(
+      future: userData,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const PremiumModeShell(
+            child: Center(child: CircularProgressIndicator()),
+          );
+        }
 
-          Map<String, dynamic> data = snapshot.data!;
-          emailController = TextEditingController(text: data['email']);
-          phoneController = TextEditingController(text: data['phone']);
-
-          return Scaffold(
+        if (snapshot.hasError) {
+          return PremiumModeShell(
             appBar: AppBar(
-              title: Text(
-                "Upload Product",
-              ),
+              title: const Text('Upload Product'),
+              actions: const [ThemeToggleIconButton()],
             ),
-            body: SingleChildScrollView(
-              padding: EdgeInsets.all(16),
-              child: Form(
-                key: formKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Inputfield(
-                      controller: nameController,
-                      label: "Product name",
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return "Required to fill";
-                        }
-                        return null;
-                      },
-                    ),
-                    Inputfield(
-                        controller: priceController,
-                        label: "Price",
-                        validator: (value) {
-                          if (value == null || value.isEmpty) {
-                            return "Required to fill";
-                          }
-                          return null;
-                        }),
-                    SizedBox(
-                      height: 10,
-                    ),
-                    Text("Select Category"),
-                    SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Row(
-                        children: [
-                          "IT equipment",
-                          "Telecommunication",
-                          "Domestic equipments",
-                          "Industrial Components"
-                        ]
-                            .map((e) => Padding(
-                                  padding: const EdgeInsets.all(5.0),
-                                  child: GestureDetector(
-                                    onTap: () {
-                                      if (selectedTopics.contains(e)) {
-                                        selectedTopics.remove(e);
-                                      } else {
-                                        selectedTopics.add(e);
-                                      }
+            child: Center(child: Text('Error: ${snapshot.error}')),
+          );
+        }
 
-                                      setState(() {});
-                                    },
-                                    child: Chip(
-                                      label: Text(
-                                        e,
-                                        style: TextStyle(
-                                            color: selectedTopics.contains(e)
-                                                ? Colors.white
-                                                : Colors.black),
-                                      ),
-                                      backgroundColor:
-                                          selectedTopics.contains(e)
-                                              ? Color.fromARGB(255, 13, 71, 161)
-                                              : null,
-                                      side: BorderSide(color: Colors.black),
-                                    ),
-                                  ),
-                                ))
-                            .toList(),
+        final data = snapshot.data;
+        if (data != null) {
+          if (nameController.text.isEmpty) {
+            nameController.text = data['name']?.toString() ?? '';
+          }
+          if (emailController.text.isEmpty) {
+            emailController.text = SupabaseRepository.client.auth.currentUser?.email ?? '';
+          }
+          if (phoneController.text.isEmpty) {
+            phoneController.text = data['phone']?.toString() ?? '';
+          }
+          if (addressController.text.isEmpty) {
+            addressController.text = data['address']?.toString() ?? '';
+          }
+        }
+
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+
+        return PremiumModeShell(
+          appBar: AppBar(
+            title: const Text('Upload Product'),
+            actions: const [ThemeToggleIconButton()],
+          ),
+          child: Form(
+            key: formKey,
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
+              children: [
+                PremiumModeSurface(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF1A5269), Color(0xFF2C8C6B)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: 28,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'List a reusable item',
+                        style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w900,
+                            ),
                       ),
-                    ),
-                    SizedBox(
-                      height: 5,
-                    ),
-                    Inputfield(
+                      const SizedBox(height: 8),
+                      Text(
+                        'Upload a photo, fill in the details, and publish a cleaner listing in minutes.',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              color: Colors.white.withValues(alpha: 0.9),
+                              height: 1.4,
+                            ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 18),
+                const PremiumModeSectionHeader(
+                  title: 'Listing details',
+                  subtitle: 'Tell buyers what you are selling and why it matters.',
+                ),
+                const SizedBox(height: 12),
+                PremiumModeSurface(
+                  child: Column(
+                    children: [
+                      Inputfield(
+                        controller: nameController,
+                        label: 'Product name',
+                        validator: (value) => value == null || value.isEmpty ? 'Required to fill' : null,
+                      ),
+                      Inputfield(
+                        controller: priceController,
+                        label: 'Price',
+                        validator: (value) => value == null || value.isEmpty ? 'Required to fill' : null,
+                      ),
+                      Inputfield(
                         controller: emailController,
-                        label: "Email",
-                        validator: (value) {
-                          if (value == null || value.isEmpty) {
-                            return "Required to fill";
-                          }
-                          return null;
-                        }),
-                    Inputfield(
+                        label: 'Email',
+                        validator: (value) => value == null || value.isEmpty ? 'Required to fill' : null,
+                      ),
+                      Inputfield(
                         controller: phoneController,
-                        label: "Phone",
-                        validator: (value) {
-                          if (value == null || value.isEmpty) {
-                            return "Required to fill";
-                          }
-                          return null;
-                        }),
-                    Inputfield(
+                        label: 'Phone',
+                        validator: (value) => value == null || value.isEmpty ? 'Required to fill' : null,
+                      ),
+                      Inputfield(
                         controller: addressController,
-                        label: "Address",
-                        validator: (value) {
-                          if (value == null || value.isEmpty) {
-                            return "Required to fill";
-                          }
-                          return null;
-                        }),
-                    Inputfield(
+                        label: 'Address',
+                        validator: (value) => value == null || value.isEmpty ? 'Required to fill' : null,
+                      ),
+                      Inputfield(
                         controller: descriptionController,
-                        label: "Description",
-                        validator: (value) {
-                          if (value == null || value.isEmpty) {
-                            return "Required to fill";
-                          }
-                          return null;
-                        }),
-                    SizedBox(height: 10),
-                    image != null
-                        ? GestureDetector(
-                            onTap: () {
-                              showPopup(context);
-                            },
+                        label: 'Product description',
+                        validator: (value) => value == null || value.isEmpty ? 'Tell buyers about the product' : null,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 18),
+                const PremiumModeSectionHeader(
+                  title: 'Choose a category',
+                  subtitle: 'Categories help buyers find the right reusable items faster.',
+                ),
+                const SizedBox(height: 12),
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      'IT equipment',
+                      'Telecommunication',
+                      'Domestic equipments',
+                      'Industrial Components'
+                    ]
+                        .map(
+                          (topic) => Padding(
+                            padding: const EdgeInsets.only(right: 10),
+                            child: ChoiceChip(
+                              selected: selectedTopics.contains(topic),
+                              label: Text(topic),
+                              labelStyle: TextStyle(
+                                color: selectedTopics.contains(topic)
+                                    ? Colors.white
+                                    : Theme.of(context).colorScheme.onSurface,
+                                fontWeight: FontWeight.w700,
+                              ),
+                              selectedColor: const Color(0xFF1A5269),
+                              backgroundColor: isDark
+                                  ? const Color(0xFF12171D)
+                                  : Colors.white,
+                              side: BorderSide(
+                                color: isDark
+                                    ? Colors.white.withValues(alpha: 0.08)
+                                    : const Color(0xFF1A5269).withValues(alpha: 0.12),
+                              ),
+                              onSelected: (_) {
+                                setState(() {
+                                  if (selectedTopics.contains(topic)) {
+                                    selectedTopics.remove(topic);
+                                  } else {
+                                    selectedTopics.add(topic);
+                                  }
+                                });
+                              },
+                            ),
+                          ),
+                        )
+                        .toList(),
+                  ),
+                ),
+                const SizedBox(height: 18),
+                const PremiumModeSectionHeader(
+                  title: 'Product image',
+                  subtitle: 'Use a clear image to make the listing look polished and trustworthy.',
+                ),
+                const SizedBox(height: 12),
+                GestureDetector(
+                  onTap: _isUploading ? null : _pickImage,
+                  child: image != null
+                      ? PremiumModeSurface(
+                          padding: EdgeInsets.zero,
+                          borderRadius: 24,
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(24),
                             child: Image.file(
                               image!,
-                              height: 300,
+                              height: 240,
+                              width: double.infinity,
+                              fit: BoxFit.cover,
                             ),
-                          )
-                        : GestureDetector(
-                            onTap: () {
-                              _pickImage();
-                            },
-                            child: DottedBorder(
-                                color: Colors.blue,
-                                dashPattern: [10, 4],
-                                radius: Radius.circular(10),
-                                borderType: BorderType.RRect,
-                                child: Container(
-                                  decoration: BoxDecoration(
-                                      borderRadius: BorderRadius.circular(10)),
-                                  height: 150,
-                                  width: double.infinity,
-                                  child: Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Icon(
-                                        color: Colors.blue[900],
-                                        Icons.folder_open,
-                                        size: 40,
-                                      ),
-                                      SizedBox(
-                                        height: 15,
-                                      ),
-                                      Text(
-                                        "Select your image",
-                                        style: TextStyle(fontSize: 15),
-                                      )
-                                    ],
-                                  ),
-                                )),
                           ),
-                    SizedBox(height: 10),
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                              backgroundColor:
-                                  Color.fromARGB(255, 13, 71, 161)),
-                          onPressed: _submitForm,
-                          child: Text(
-                            "Submit",
-                            style: TextStyle(color: Colors.white),
-                          )),
-                    ),
-                  ],
+                        )
+                      : DottedBorder(
+                          color: const Color(0xFF1A5269),
+                          dashPattern: const [10, 4],
+                          radius: const Radius.circular(24),
+                          borderType: BorderType.RRect,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: isDark
+                                  ? const Color(0xFF12171D)
+                                  : Colors.white,
+                              borderRadius: BorderRadius.circular(24),
+                            ),
+                            height: 180,
+                            width: double.infinity,
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.folder_open, size: 40, color: const Color(0xFF1A5269)),
+                                const SizedBox(height: 12),
+                                Text(
+                                  'Upload image',
+                                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'Tap to choose from gallery',
+                                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                      ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
                 ),
-              ),
+                const SizedBox(height: 18),
+                PremiumModeSurface(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Upload summary',
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                              fontWeight: FontWeight.w900,
+                            ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Review your details, then publish the listing to the marketplace.',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
+                              height: 1.4,
+                            ),
+                      ),
+                      const SizedBox(height: 14),
+                      FilledButton.icon(
+                        style: FilledButton.styleFrom(
+                          backgroundColor: const Color(0xFF1A5269),
+                          foregroundColor: Colors.white,
+                          minimumSize: const Size.fromHeight(52),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                        ),
+                        onPressed: _isUploading ? null : _addProduct,
+                        icon: _isUploading
+                            ? const SizedBox(
+                                height: 18,
+                                width: 18,
+                                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                              )
+                            : const Icon(Icons.publish_outlined),
+                        label: Text(
+                          _isUploading ? 'Uploading image...' : 'Upload Product',
+                          style: const TextStyle(fontWeight: FontWeight.w800),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
-          );
-        });
-  }
-
-  void showPopup(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: Text("Change Image"),
-          content: Text("Do you want to change image ?"),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context); // Close the popup
-              },
-              child: Text("No"),
-            ),
-            TextButton(
-                onPressed: () async {
-                  _pickImage();
-                  Navigator.pop(context);
-                },
-                child: Text("Yes")),
-          ],
+          ),
         );
       },
     );

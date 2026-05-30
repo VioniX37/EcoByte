@@ -1,21 +1,41 @@
-MIT License
+EcoByte Personal Use License v1.0
 
-Copyright (c) 2025 VioniX
+Copyright (c) 2026 VioniX. All rights reserved.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+1. Grant of Permission
+Subject to the terms of this license, you are granted a limited, revocable,
+non-exclusive, non-transferable license to:
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+- clone this repository;
+- install dependencies;
+- build and run the application for personal, internal, non-commercial use.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+2. Restrictions
+You may not, without prior written permission from VioniX:
+
+- use this software or any derivative for commercial purposes;
+- sell, sublicense, rent, lease, or monetize the software;
+- redistribute, publish, host, or mirror the source code or binaries;
+- remove copyright, branding, or license notices;
+- represent this software as your own work.
+
+3. Ownership
+All intellectual property rights in and to the software remain exclusively with
+VioniX.
+
+4. No Warranty
+THIS SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT.
+
+5. Limitation of Liability
+IN NO EVENT SHALL VIONIX OR ITS CONTRIBUTORS BE LIABLE FOR ANY CLAIM, DAMAGES,
+OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE,
+ARISING FROM, OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+
+6. Termination
+Any violation of this license automatically terminates your rights under it.
+
+7. Contact
+For commercial licensing or special permissions, contact VioniX.

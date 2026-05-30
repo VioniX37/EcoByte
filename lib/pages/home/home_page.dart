@@ -1,330 +1,752 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:e_waste/app/data/supabase_repository.dart';
+import 'package:e_waste/app/widgets/premium_mode_ui.dart';
+import 'package:e_waste/app/widgets/theme_toggle_icon_button.dart';
 import 'package:e_waste/others/color.dart';
 import 'package:e_waste/pages/auth/login_screen.dart';
-import 'package:e_waste/pages/home/know_ewaste.dart';
-import 'package:e_waste/pages/home/widgets/sdg_goals.dart';
-import 'package:e_waste/pages/profile/profile.dart';
+import 'package:e_waste/pages/about/about_page.dart';
 import 'package:e_waste/pages/buy_sell/buy_screen.dart';
+import 'package:e_waste/pages/buy_sell/my_products.dart';
+import 'package:e_waste/pages/buy_sell/product_screen.dart';
 import 'package:e_waste/pages/buy_sell/sell_screen.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:e_waste/pages/home/know_ewaste.dart';
+import 'package:e_waste/pages/profile/profile.dart';
+import 'package:e_waste/pages/profile/rewards.dart';
 import 'package:flutter/material.dart';
-
-Future<Map<String, dynamic>?> getUserData() async {
-  User? user = FirebaseAuth.instance.currentUser; // Get logged-in user
-  if (user == null) return null;
-
-  DocumentSnapshot userDoc =
-      await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
-
-  if (userDoc.exists) {
-    return userDoc.data() as Map<String, dynamic>;
-  }
-
-  return null;
-}
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 Future<List<Map<String, dynamic>>> fetchProducts() async {
-  try {
-    // Reference to the 'products' collection
-    CollectionReference products =
-        FirebaseFirestore.instance.collection('products');
-
-    // Fetch all documents
-    QuerySnapshot querySnapshot = await products.get();
-
-    // Convert documents to a list
-    List<Map<String, dynamic>> productList = querySnapshot.docs.map((doc) {
-      return doc.data() as Map<String, dynamic>;
-    }).toList();
-    return productList;
-
-    // Print the retrieved data
-  } catch (e) {
-    print("Error fetching products: $e");
-    return [];
-  }
+  return SupabaseRepository.fetchProducts();
 }
 
 void logout(BuildContext context) async {
-  await FirebaseAuth.instance.signOut();
+  await SupabaseRepository.client.auth.signOut();
+  if (!context.mounted) {
+    return;
+  }
   Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (ctx) => LoginScreen()), (route) => false);
+    MaterialPageRoute(builder: (ctx) => LoginScreen()),
+    (route) => false,
+  );
 }
 
-class HomePage extends StatelessWidget {
-  const HomePage({Key? key}) : super(key: key);
+class HomePage extends StatefulWidget {
+  const HomePage({super.key});
+
+  @override
+  State<HomePage> createState() => _HomePageState();
+}
+
+class _HomePageState extends State<HomePage> {
+  late Future<_DashboardData> _dashboardFuture;
+  dynamic _dashboardChannel;
+
+  @override
+  void initState() {
+    super.initState();
+    _dashboardFuture = _loadDashboardData();
+    _subscribeToRealtimeUpdates();
+  }
+
+  void _subscribeToRealtimeUpdates() {
+    _dashboardChannel = SupabaseRepository.client.channel('home-dashboard-realtime')
+      ..onPostgresChanges(
+        event: PostgresChangeEvent.all,
+        schema: 'public',
+        table: 'products',
+        callback: (_) => _refreshDashboard(),
+      )
+      ..onPostgresChanges(
+        event: PostgresChangeEvent.all,
+        schema: 'public',
+        table: 'messages',
+        callback: (_) => _refreshDashboard(),
+      )
+      ..onPostgresChanges(
+        event: PostgresChangeEvent.all,
+        schema: 'public',
+        table: 'profiles',
+        callback: (_) => _refreshDashboard(),
+      )
+      ..onPostgresChanges(
+        event: PostgresChangeEvent.all,
+        schema: 'public',
+        table: 'rewards',
+        callback: (_) => _refreshDashboard(),
+      )
+      .subscribe();
+  }
+
+  Future<_DashboardData> _loadDashboardData() async {
+    final userId = SupabaseRepository.currentUserId;
+    final results = await Future.wait([
+      SupabaseRepository.fetchProducts(),
+      SupabaseRepository.fetchMessages(currentUserId: userId),
+      SupabaseRepository.fetchCurrentRewardPoints(),
+      userId == null
+          ? Future.value(<Map<String, dynamic>>[])
+          : SupabaseRepository.fetchMyProducts(userId),
+    ]);
+
+    final products = results[0] as List<Map<String, dynamic>>;
+    final messages = results[1] as List<Map<String, dynamic>>;
+    final points = results[2] as int;
+    final myProducts = results[3] as List<Map<String, dynamic>>;
+
+    return _DashboardData(
+      products: products,
+      myProducts: myProducts,
+      communityPosts: messages.length,
+      points: points,
+    );
+  }
+
+  void _refreshDashboard() {
+    setState(() {
+      _dashboardFuture = _loadDashboardData();
+    });
+  }
+
+  @override
+  void dispose() {
+    if (_dashboardChannel != null) {
+      SupabaseRepository.client.removeChannel(_dashboardChannel);
+    }
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder(
-        future: fetchProducts(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return Scaffold(
-              body: const Center(
-                child: CircularProgressIndicator(),
-              ),
-            ); // Show loading spinner
-          } else if (snapshot.hasError) {
-            return Center(child: Text("Error: ${snapshot.error}"));
-          } else if (!snapshot.hasData || snapshot.data == null) {
-            return const Center(child: Text("No data found"));
-          }
+    return FutureBuilder<_DashboardData>(
+      future: _dashboardFuture,
+      builder: (context, snapshot) {
+        final dashboard = snapshot.data;
+        final products = dashboard?.products ?? <Map<String, dynamic>>[];
+        final myProducts = dashboard?.myProducts ?? <Map<String, dynamic>>[];
+        final listingCount = products.length;
+        final communityPosts = dashboard?.communityPosts ?? 0;
+        final points = dashboard?.points ?? 0;
+        final featuredProducts = products.take(5).toList();
+        final totalListingValue = myProducts.fold<double>(
+          0,
+          (sum, product) => sum + ((product['price'] as num?)?.toDouble() ?? 0),
+        );
 
-          List<Map<String, dynamic>> data = snapshot.data!;
-
-          return Scaffold(
-            backgroundColor: const Color(0xFFE5F5F0),
-            appBar: AppBar(
-              title: Text(
-                'EcoByte',
-                style: TextStyle(fontSize: 25, fontWeight: FontWeight.bold),
+        return PremiumModeShell(
+          appBar: AppBar(
+            title: const Text('EcoByte'),
+            actions: [
+              IconButton(
+                onPressed: _refreshDashboard,
+                tooltip: 'Refresh dashboard',
+                icon: const Icon(Icons.refresh),
               ),
-              actions: [
-                PopupMenuButton<String>(
-                  onSelected: (String result) {
-                    if (result == 'Profile') {
-                      Navigator.of(context).push(MaterialPageRoute(
-                          builder: (ctx) => ProfileScreen(
-                                userData: getUserData(),
-                              )));
-                    } else if (result == 'Log Out') {
+              const ThemeToggleIconButton(),
+              PopupMenuButton<String>(
+                onSelected: (value) {
+                  switch (value) {
+                    case 'profile':
+                      Navigator.of(context).push(
+                        MaterialPageRoute(builder: (ctx) => const ProfileScreen()),
+                      );
+                      break;
+                    case 'marketplace':
+                      Navigator.of(context).push(
+                        MaterialPageRoute(builder: (ctx) => const BuyScreen()),
+                      );
+                      break;
+                    case 'my_products':
+                      Navigator.of(context).push(
+                        MaterialPageRoute(builder: (ctx) => const MyProducts()),
+                      );
+                      break;
+                    case 'about':
+                      Navigator.of(context).push(
+                        MaterialPageRoute(builder: (ctx) => const AboutPage()),
+                      );
+                      break;
+                    case 'logout':
                       logout(context);
-                    }
-                  },
-                  itemBuilder: (BuildContext context) => [
-                    PopupMenuItem<String>(
-                      value: 'Profile',
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.person,
-                            color: Colors.black,
-                          ),
-                          SizedBox(width: 8),
-                          Text('Profile'),
-                        ],
-                      ),
-                    ),
-                    PopupMenuItem<String>(
-                      value: 'Log Out',
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.logout,
-                            color: Colors.black,
-                          ),
-                          SizedBox(width: 8),
-                          Text('Log Out'),
-                        ],
-                      ),
-                    )
-                  ],
+                      break;
+                  }
+                },
+                itemBuilder: (context) => const [
+                  PopupMenuItem(value: 'profile', child: Text('Profile')),
+                  PopupMenuItem(value: 'marketplace', child: Text('Marketplace')),
+                  PopupMenuItem(value: 'my_products', child: Text('My products')),
+                  PopupMenuItem(value: 'about', child: Text('About')),
+                  PopupMenuItem(value: 'logout', child: Text('Logout')),
+                ],
+              ),
+            ],
+          ),
+          child: RefreshIndicator(
+            onRefresh: () async {
+              _refreshDashboard();
+              await _dashboardFuture;
+            },
+            child: ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
+              children: [
+              PremiumModeSurface(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF1A5269), Color(0xFF2C8C6B)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
                 ),
-              ],
-            ),
-            body: SingleChildScrollView(
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
+                borderRadius: 32,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const SizedBox(height: 16),
                     Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Expanded(
-                          flex: 6,
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
-                            children: const [
+                            children: [
                               Text(
-                                'Reduce E-Waste,\nReward Yourself',
-                                style: TextStyle(
-                                  fontSize: 25,
-                                  fontWeight: FontWeight.bold,
-                                  color: Color(0xFF1A5269),
-                                ),
+                                'Reduce\nE-waste\nBuild Value.',
+                                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w900,
+                                      height: 1.05,
+                                    ),
                               ),
-                              SizedBox(height: 8),
+                              const SizedBox(height: 8),
                               Text(
-                                'Recycle. Repair. Reuse.',
-                                style: TextStyle(
-                                  fontSize: 20,
-                                  color: Color(0xFF1A5269),
-                                ),
+                                'Sell reusable devices, discover listings, and keep every item in circulation for longer.',
+                                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                      color: Colors.white.withValues(alpha: 0.9),
+                                      height: 1.45,
+                                    ),
                               ),
                             ],
                           ),
                         ),
-                        Expanded(
-                          flex: 4,
+                        const SizedBox(width: 14),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(22),
                           child: Image.asset(
                             'assets/waste.png',
-                            fit: BoxFit.contain,
-                            height: 120,
+                            width: 92,
+                            height: 92,
+                            fit: BoxFit.cover,
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 15),
-                    ElevatedButton(
-                      onPressed: () {
-                        Navigator.of(context).push(
-                            MaterialPageRoute(builder: (ctx) => SellScreen()));
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.appColor,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 22, vertical: 10),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(32),
-                        ),
-                      ),
-                      child: const Text(
-                        'Get Started',
-                        style: TextStyle(fontSize: 18),
-                      ),
+                    const SizedBox(height: 18),
+                    Wrap(
+                      spacing: 10,
+                      runSpacing: 10,
+                      children: const [
+                        _HeroStat(label: 'Listings', value: 'Live'),
+                        _HeroStat(label: 'Reuse impact', value: 'Premium'),
+                        _HeroStat(label: 'Actions', value: 'Fast'),
+                      ],
                     ),
-                    SizedBox(
-                      height: 20,
-                    ),
-                    GestureDetector(
-                      onTap: () {
-                        Navigator.of(context).push(MaterialPageRoute(
-                            builder: (ctx) => BuyScreen()));
-                      },
-                      child: Text(
-                        "View Products",
-                        style: TextStyle(
-                            color: AppColors.appColor,
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                    SizedBox(
-                      height: 20,
-                    ),
-                    GestureDetector(
-                      onTap: () {
-                        Navigator.of(context).push(MaterialPageRoute(
-                            builder: (ctx) => BuyScreen()));
-                      },
-                      child: SizedBox(
-                        height:
-                            100, // Sufficient height to show ListTile content
-                        child: ListView.builder(
-                          scrollDirection:
-                              Axis.horizontal, // Enables horizontal scrolling
-                          itemCount: 4, // Ensure itemCount matches data length
-                          itemBuilder: (context, index) {
-                            return Container(
-                              width: 175, // Set a fixed width for each item
-                              margin: EdgeInsets.symmetric(
-                                  horizontal: 8), // Add spacing between items
-                              child: ListTile(
-                                tileColor: AppColors
-                                    .appColor, // Add color to confirm visibility
-                                leading: Image.network(
-                                  data[index]['imageUrl'],
-                                  width: 50,
-                                  height: 50,
-                                  fit: BoxFit.cover,
-                                ),
-                                title: Text(
-                                  data[index]['name'],
-                                  style: TextStyle(color: Colors.white),
-                                ),
-                                subtitle: Text(
-                                  data[index]['price'],
-                                  style: TextStyle(color: Colors.white70),
-                                ),
-                              ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 18),
+              const PremiumModeSectionHeader(
+                title: 'Quick access',
+                subtitle: 'Jump straight to the parts of the app people use most.',
+              ),
+              const SizedBox(height: 12),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final tileWidth = (constraints.maxWidth - 12) / 2;
+                  return Wrap(
+                    spacing: 12,
+                    runSpacing: 12,
+                    children: [
+                      SizedBox(
+                        width: tileWidth,
+                        child: PremiumModeActionTile(
+                          label: 'Marketplace',
+                          subtitle: 'Browse reusable items',
+                          icon: Icons.storefront_outlined,
+                          accent: const Color(0xFF1A5269),
+                          onTap: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(builder: (ctx) => const BuyScreen()),
                             );
                           },
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 24),
-                    const Text(
-                      'Our Impact Goals',
-                      style: TextStyle(
-                        fontSize: 28,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF1A5269),
+                      SizedBox(
+                        width: tileWidth,
+                        child: PremiumModeActionTile(
+                          label: 'Upload product',
+                          subtitle: 'Create a listing',
+                          icon: Icons.upload_outlined,
+                          accent: const Color(0xFF2C8C6B),
+                          onTap: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(builder: (ctx) => SellScreen()),
+                            );
+                          },
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 16),
-                    SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      SizedBox(
+                        width: tileWidth,
+                        child: PremiumModeActionTile(
+                          label: 'Rewards',
+                          subtitle: 'View available perks',
+                          icon: Icons.emoji_events_outlined,
+                          accent: const Color(0xFFF59E0B),
+                          onTap: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(builder: (ctx) => const Rewards()),
+                            );
+                          },
+                        ),
+                      ),
+                      SizedBox(
+                        width: tileWidth,
+                        child: PremiumModeActionTile(
+                          label: 'Profile',
+                          subtitle: 'Edit your account',
+                          icon: Icons.person_outline,
+                          accent: const Color(0xFF6D5BD0),
+                          onTap: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(builder: (ctx) => const ProfileScreen()),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              ),
+              const SizedBox(height: 18),
+              PremiumModeSurface(
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          sdgCard(
-                            url: 'assets/3.png',
+                          Container(
+                            height: 52,
+                            width: 52,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF1A5269).withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(18),
+                            ),
+                            child: const Icon(Icons.inventory_2_outlined, color: Color(0xFF1A5269)),
                           ),
-                          SizedBox(
-                            width: 10,
+                          const SizedBox(height: 12),
+                          Text(
+                            'View your listings',
+                            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                  fontWeight: FontWeight.w900,
+                                ),
                           ),
-                          sdgCard(
-                            url: 'assets/9.png',
-                          ),
-                          SizedBox(
-                            width: 10,
-                          ),
-                          sdgCard(
-                            url: 'assets/11.png',
-                          ),
-                          SizedBox(
-                            width: 10,
-                          ),
-                          sdgCard(
-                            url: 'assets/12.png',
-                          ),
-                          SizedBox(
-                            width: 10,
-                          ),
-                          sdgCard(
-                            url: 'assets/13.png',
-                          ),
-                          SizedBox(
-                            width: 10,
-                          ),
-                          sdgCard(
-                            url: 'assets/17.png',
+                          const SizedBox(height: 4),
+                          Text(
+                            'Open your published items and track what you have on sale right now.',
+                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                ),
                           ),
                         ],
                       ),
                     ),
-                    const SizedBox(height: 32),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: () {
-                          Navigator.of(context).push(
-                              MaterialPageRoute(builder: (ctx) => EWasteApp()));
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.appColor,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(32),
-                          ),
-                        ),
-                        child: const Text(
-                          'Know your E-Waste',
-                          style: TextStyle(fontSize: 16),
-                        ),
-                      ),
+                    const SizedBox(width: 12),
+                    FilledButton(
+                      onPressed: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(builder: (ctx) => const MyProducts()),
+                        );
+                      },
+                      child: const Text('Open'),
                     ),
-                    const SizedBox(height: 16),
                   ],
                 ),
               ),
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  Expanded(
+                    child: _DashboardMiniStat(
+                      label: 'My listings',
+                      value: myProducts.length.toString(),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _DashboardMiniStat(
+                      label: 'Total value',
+                      value: '₹${totalListingValue.toStringAsFixed(0)}',
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 18),
+              PremiumModeSurface(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const PremiumModeSectionHeader(
+                      title: 'Impact snapshot',
+                      subtitle: 'A cleaner view of how the app pushes reuse and recycling forward.',
+                    ),
+                    const SizedBox(height: 14),
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        final isWide = constraints.maxWidth > 700;
+                        final metricWidth = isWide
+                            ? (constraints.maxWidth - 24) / 3
+                            : constraints.maxWidth;
+                        return Wrap(
+                          spacing: 12,
+                          runSpacing: 12,
+                          children: [
+                            SizedBox(
+                              width: metricWidth,
+                              child: PremiumModeMetricCard(
+                                label: 'Live listings',
+                                value: listingCount.toString(),
+                                icon: Icons.inventory_2_outlined,
+                                accent: const Color(0xFF1A5269),
+                              ),
+                            ),
+                            SizedBox(
+                              width: metricWidth,
+                              child: PremiumModeMetricCard(
+                                label: 'Community posts',
+                                value: communityPosts.toString(),
+                                icon: Icons.forum_outlined,
+                                accent: const Color(0xFF2C8C6B),
+                              ),
+                            ),
+                            SizedBox(
+                              width: metricWidth,
+                              child: PremiumModeMetricCard(
+                                label: 'Your points',
+                                value: points.toString(),
+                                icon: Icons.emoji_events_outlined,
+                                accent: const Color(0xFFF59E0B),
+                              ),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 18),
+              const PremiumModeSectionHeader(
+                title: 'Featured listings',
+                subtitle: 'A quick preview of the newest reusable items in the marketplace.',
+              ),
+              const SizedBox(height: 12),
+              if (snapshot.connectionState == ConnectionState.waiting)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 24),
+                  child: Center(child: CircularProgressIndicator()),
+                )
+              else if (snapshot.hasError)
+                PremiumModeSurface(
+                  child: Column(
+                    children: [
+                      const Icon(Icons.storefront_outlined, size: 42),
+                      const SizedBox(height: 10),
+                      const Text('We could not load featured listings right now.'),
+                      const SizedBox(height: 12),
+                      FilledButton(
+                        onPressed: _refreshDashboard,
+                        child: const Text('Retry'),
+                      ),
+                    ],
+                  ),
+                )
+              else if (featuredProducts.isEmpty)
+                PremiumModeSurface(
+                  child: Column(
+                    children: [
+                      const Icon(Icons.inventory_2_outlined, size: 42),
+                      const SizedBox(height: 10),
+                      const Text('No listings available yet.'),
+                      const SizedBox(height: 12),
+                      FilledButton(
+                        onPressed: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(builder: (ctx) => SellScreen()),
+                          );
+                        },
+                        child: const Text('Upload first item'),
+                      ),
+                    ],
+                  ),
+                )
+              else
+                SizedBox(
+                  height: 208,
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: featuredProducts.length,
+                    separatorBuilder: (context, index) => const SizedBox(width: 12),
+                    itemBuilder: (context, index) {
+                      final product = featuredProducts[index];
+                      return SizedBox(
+                        width: 240,
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(26),
+                          onTap: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (ctx) => ProductScreen(productInfo: product),
+                              ),
+                            );
+                          },
+                          child: PremiumModeSurface(
+                            padding: EdgeInsets.zero,
+                            borderRadius: 26,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.max,
+                              children: [
+                                ClipRRect(
+                                  borderRadius: const BorderRadius.vertical(top: Radius.circular(26)),
+                                  child: Image.network(
+                                    product['image_url'] ?? product['imageUrl'] ?? '',
+                                    height: 102,
+                                    width: double.infinity,
+                                    fit: BoxFit.cover,
+                                  ),
+                                ),
+                                Expanded(
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(12),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          product['name'] ?? '',
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                                fontWeight: FontWeight.w800,
+                                              ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          product['description'] ?? '',
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                              ),
+                                        ),
+                                        const Spacer(),
+                                        Row(
+                                          children: [
+                                            Flexible(
+                                              child: Text(
+                                                '₹ ${product['price']}',
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: const TextStyle(
+                                                  color: Color(0xFF2C8C6B),
+                                                  fontWeight: FontWeight.w900,
+                                                ),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 8),
+                                            const Icon(Icons.arrow_forward_ios, size: 14),
+                                          ],
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              const SizedBox(height: 18),
+              const PremiumModeSectionHeader(
+                title: 'Impact goals',
+                subtitle: 'The goals are shown as premium image cards instead of a simple logo strip.',
+              ),
+              const SizedBox(height: 12),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final isWide = constraints.maxWidth > 700;
+                  final cardWidth = isWide
+                      ? (constraints.maxWidth - 24) / 3
+                      : (constraints.maxWidth - 12) / 2;
+                  return Wrap(
+                    spacing: 12,
+                    runSpacing: 12,
+                    children: [
+                      SizedBox(width: cardWidth, child: const _GoalCard(asset: 'assets/3.png')),
+                      SizedBox(width: cardWidth, child: const _GoalCard(asset: 'assets/9.png')),
+                      SizedBox(width: cardWidth, child: const _GoalCard(asset: 'assets/11.png')),
+                      SizedBox(width: cardWidth, child: const _GoalCard(asset: 'assets/12.png')),
+                      SizedBox(width: cardWidth, child: const _GoalCard(asset: 'assets/13.png')),
+                      SizedBox(width: cardWidth, child: const _GoalCard(asset: 'assets/17.png')),
+                    ],
+                  );
+                },
+              ),
+              const SizedBox(height: 18),
+              PremiumModeSurface(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Know your\nE-waste',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.w900,
+                          ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Open the guide to understand device categories and safer disposal methods.',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          ),
+                    ),
+                    const SizedBox(height: 12),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: FilledButton(
+                        style: FilledButton.styleFrom(
+                          backgroundColor: AppColors.appColor,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                        ),
+                        onPressed: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(builder: (ctx) => const EWasteApp()),
+                          );
+                        },
+                        child: const Text('Open guide'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              ],
             ),
-          );
-        });
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _HeroStat extends StatelessWidget {
+  const _HeroStat({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.16)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(value, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900)),
+          const SizedBox(height: 2),
+          Text(label, style: TextStyle(color: Colors.white.withValues(alpha: 0.84), fontSize: 12)),
+        ],
+      ),
+    );
+  }
+}
+
+class _GoalCard extends StatelessWidget {
+  const _GoalCard({required this.asset});
+
+  final String asset;
+
+  @override
+  Widget build(BuildContext context) {
+    return PremiumModeSurface(
+      padding: EdgeInsets.zero,
+      borderRadius: 24,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(24),
+        child: Image.asset(
+          asset,
+          height: 156,
+          width: double.infinity,
+          fit: BoxFit.cover,
+        ),
+      ),
+    );
+  }
+}
+
+class _DashboardData {
+  const _DashboardData({
+    required this.products,
+    required this.myProducts,
+    required this.communityPosts,
+    required this.points,
+  });
+
+  final List<Map<String, dynamic>> products;
+  final List<Map<String, dynamic>> myProducts;
+  final int communityPosts;
+  final int points;
+}
+
+class _DashboardMiniStat extends StatelessWidget {
+  const _DashboardMiniStat({
+    required this.label,
+    required this.value,
+  });
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            value,
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w900,
+                ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+          ),
+        ],
+      ),
+    );
   }
 }

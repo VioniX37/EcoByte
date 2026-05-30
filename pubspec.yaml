@@ -1,5 +1,5 @@
 name: e_waste
-description: "A new Flutter project."
+description: "EcoByte: e-waste reuse, recycling discovery, and community sustainability platform."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -28,12 +28,9 @@ environment:
 # the latest version available on pub.dev. To see which dependencies have newer
 # versions available, run `flutter pub outdated`.
 dependencies:
-  cloud_firestore: ^5.6.4
   cupertino_icons: ^1.0.8
   dotted_border: ^2.1.0
-  firebase_auth: ^5.5.0
-  firebase_core: ^3.12.0
-  firebase_storage: ^12.4.4
+  flutter_dotenv: ^5.1.0
   flutter:
     sdk: flutter
   flutter_gemini: ^3.0.0
@@ -56,6 +53,7 @@ dependencies:
 
 dev_dependencies:
   flutter_lints: ^5.0.0
+  flutter_launcher_icons: ^0.14.3
   flutter_test:
     sdk: flutter
 
@@ -70,7 +68,9 @@ flutter:
   uses-material-design: true
   # To add assets to your application, add an assets section, like this:
   assets:
+    - .env
     - assets/logo.png
+    - assets/vionix.png
     - assets/waste.png
     - assets/ecobot.png
     - assets/3.png
@@ -79,6 +79,13 @@ flutter:
     - assets/13.png
     - assets/17.png
     - assets/12.png
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: assets/logo.png
+  min_sdk_android: 21
+  remove_alpha_ios: true
   #   - images/a_dot_ham.jpeg
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

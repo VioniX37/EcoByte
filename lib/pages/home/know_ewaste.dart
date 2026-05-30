@@ -1,26 +1,20 @@
 import 'package:e_waste/pages/map/map.dart';
+import 'package:e_waste/pages/main_screen.dart';
+import 'package:e_waste/pages/home/widgets/dashboard_bottom_navigation.dart';
 import 'package:flutter/material.dart';
+import 'package:e_waste/app/widgets/theme_toggle_icon_button.dart';
 
 class EWasteApp extends StatelessWidget {
-  const EWasteApp({Key? key}) : super(key: key);
+  const EWasteApp({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'E-Waste Categories',
-      theme: ThemeData(
-        primarySwatch: Colors.green,
-        scaffoldBackgroundColor: const Color(0xFFE5F5F0),
-        fontFamily: 'Roboto',
-      ),
-      home: const EWasteHomePage(),
-      debugShowCheckedModeBanner: false,
-    );
+    return const EWasteHomePage();
   }
 }
 
 class EWasteHomePage extends StatefulWidget {
-  const EWasteHomePage({Key? key}) : super(key: key);
+  const EWasteHomePage({super.key});
 
   @override
   State<EWasteHomePage> createState() => _EWasteHomePageState();
@@ -119,76 +113,91 @@ class _EWasteHomePageState extends State<EWasteHomePage> {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Scaffold(
-      backgroundColor: const Color(0xFFE5F5F0),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        title: const Text('E-Waste Categories',
-            style: TextStyle(color: Colors.white)),
-        backgroundColor: const Color(0xFF1A5269),
+        centerTitle: true,
+        title: const Text('E-Waste Groups'),
         elevation: 0,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.info_outline, color: Colors.white),
-            onPressed: () {
-              // Show info dialog
-              showDialog(
-                context: context,
-                builder: (context) => AlertDialog(
-                  backgroundColor: const Color(0xFFE5F5F0),
-                  title: const Text('About E-Waste'),
-                  content: const Text(
-                    'Electronic waste or e-waste describes discarded electrical or electronic devices. Proper disposal and recycling of e-waste is important for environmental and health reasons.',
-                  ),
-                  actions: [
-                    TextButton(
-                      child: const Text('Close',
-                          style: TextStyle(color: Color(0xFF1A5269))),
-                      onPressed: () => Navigator.of(context).pop(),
-                    ),
-                  ],
+        actions: const [ThemeToggleIconButton()],
+        leading: IconButton(
+          icon: const Icon(Icons.info_outline, color: Colors.white),
+          tooltip: 'About E-Waste',
+          onPressed: () {
+            showDialog(
+              context: context,
+              builder: (context) => AlertDialog(
+                backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+                title: const Text(
+                  'About E-Waste',
+                  textAlign: TextAlign.center,
                 ),
-              );
-            },
-          ),
-        ],
+                content: const Text(
+                  'Electronic waste or e-waste describes discarded electrical or electronic devices. Proper disposal and recycling of e-waste is important for environmental and health reasons.',
+                  textAlign: TextAlign.center,
+                ),
+                actions: [
+                  TextButton(
+                    child: Text('Close', style: TextStyle(color: scheme.primary)),
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+      ),
+      bottomNavigationBar: DashboardBottomNavigationWidget(
+        onDestinationSelected: (value) {
+          // Navigate back to main screen and set selected index
+          dashboardIndexNotifier.value = value;
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(builder: (ctx) => const MainScreen()),
+            (route) => false,
+          );
+        },
       ),
       body: ListView(
         padding: const EdgeInsets.all(16.0),
         children: [
-          _buildHeader(),
+          _buildHeader(context),
           const SizedBox(height: 20),
           _buildCategoriesGrid(),
           const SizedBox(height: 20),
-          _buildInfoSection(),
+          _buildInfoSection(context),
         ],
       ),
     );
   }
 
-  Widget _buildHeader() {
+  Widget _buildHeader(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.all(16.0),
       decoration: BoxDecoration(
-        color: const Color(0xFF1A5269),
+        color: scheme.primary,
         borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: const [
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
           Text(
             'Know Your E-Waste',
+            textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 28,
               fontWeight: FontWeight.bold,
-              color: Colors.white,
+              color: scheme.onPrimary,
             ),
           ),
-          SizedBox(height: 8),
+          const SizedBox(height: 8),
           Text(
             'Learn about different categories of electronic waste and how to properly dispose of them.',
+            textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 16,
-              color: Colors.white70,
+              color: scheme.onPrimary.withValues(alpha: 0.7),
             ),
           ),
         ],
@@ -224,58 +233,47 @@ class _EWasteHomePageState extends State<EWasteHomePage> {
     );
   }
 
-  Widget _buildInfoSection() {
+  Widget _buildInfoSection(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Card(
       elevation: 4,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      color: Colors.white,
+      color: scheme.surfaceContainerLow,
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
+            Text(
               'Why Recycle E-Waste?',
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
-                color: Color(0xFF1A5269),
+                color: scheme.primary,
               ),
             ),
             const SizedBox(height: 12),
-            _buildInfoItem(
-              Icons.warning,
-              'Prevents toxic elements from polluting the environment',
-            ),
-            _buildInfoItem(
-              Icons.recycling,
-              'Recovers valuable materials that can be reused',
-            ),
-            _buildInfoItem(
-              Icons.energy_savings_leaf,
-              'Saves energy compared to mining raw materials',
-            ),
-            _buildInfoItem(
-              Icons.health_and_safety,
-              'Protects human health from hazardous substances',
-            ),
+            _buildInfoItem(Icons.warning, 'Prevents toxic elements from polluting the environment', scheme),
+            _buildInfoItem(Icons.recycling, 'Recovers valuable materials that can be reused', scheme),
+            _buildInfoItem(Icons.energy_savings_leaf, 'Saves energy compared to mining raw materials', scheme),
+            _buildInfoItem(Icons.health_and_safety, 'Protects human health from hazardous substances', scheme),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildInfoItem(IconData icon, String text) {
+  Widget _buildInfoItem(IconData icon, String text, ColorScheme scheme) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
       child: Row(
         children: [
-          Icon(icon, color: Colors.green, size: 24),
+          Icon(icon, color: scheme.secondary, size: 24),
           const SizedBox(width: 16),
           Expanded(
             child: Text(
               text,
-              style: const TextStyle(fontSize: 16),
+              style: TextStyle(fontSize: 16, color: scheme.onSurface),
             ),
           ),
         ],
@@ -287,21 +285,27 @@ class _EWasteHomePageState extends State<EWasteHomePage> {
 class CategoryCard extends StatelessWidget {
   final EWasteCategory category;
 
-  const CategoryCard({Key? key, required this.category}) : super(key: key);
+  const CategoryCard({super.key, required this.category});
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final surfaceColor = isDark ? scheme.surfaceContainerHighest : scheme.surface;
     return Card(
-      elevation: 4,
+      elevation: isDark ? 10 : 4,
+      shadowColor: isDark ? Colors.black.withValues(alpha: 0.7) : null,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      color: Colors.white,
+      color: surfaceColor,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
             height: 100,
             decoration: BoxDecoration(
-              color: category.color.withOpacity(0.8),
+              color: isDark
+                  ? category.color.withValues(alpha: 0.7)
+                  : category.color.withValues(alpha: 0.8),
               borderRadius: const BorderRadius.only(
                 topLeft: Radius.circular(12),
                 topRight: Radius.circular(12),
@@ -311,39 +315,40 @@ class CategoryCard extends StatelessWidget {
               child: Icon(
                 category.iconData,
                 size: 50,
-                color: Colors.white,
+                color: scheme.onPrimary,
               ),
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.all(12.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '${category.id}. ${category.title}',
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                    color: Color(0xFF1A5269),
-                  ),
-                ),
-                const SizedBox(height: 8), // Increased from 4 to 8
-                SizedBox(
-                  height: 40, // Fixed height container for description text
-                  child: Text(
-                    category.description,
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.all(12.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '${category.id}. ${category.title}',
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      fontSize: 11, // Reduced from 12 to 11
-                      color: Colors.grey[600],
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                      color: scheme.primary,
                     ),
                   ),
-                ),
-              ],
+                  const SizedBox(height: 8),
+                  Flexible(
+                    child: Text(
+                      category.description,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: scheme.onSurface.withValues(alpha: 0.7),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ],
@@ -355,20 +360,30 @@ class CategoryCard extends StatelessWidget {
 class CategoryDetailPage extends StatelessWidget {
   final EWasteCategory category;
 
-  const CategoryDetailPage({Key? key, required this.category})
-      : super(key: key);
+  const CategoryDetailPage({super.key, required this.category});
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Scaffold(
-      backgroundColor: const Color(0xFFE5F5F0),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        iconTheme: IconThemeData(color: Colors.white),
+        centerTitle: true,
+        iconTheme: IconThemeData(color: scheme.onPrimary),
         title: Text(
           category.title,
-          style: TextStyle(color: Colors.white),
+          style: TextStyle(color: scheme.onPrimary),
         ),
-        backgroundColor: const Color(0xFF1A5269),
+        backgroundColor: scheme.primary,
+      ),
+      bottomNavigationBar: DashboardBottomNavigationWidget(
+        onDestinationSelected: (value) {
+          dashboardIndexNotifier.value = value;
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(builder: (ctx) => const MainScreen()),
+            (route) => false,
+          );
+        },
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
@@ -377,11 +392,11 @@ class CategoryDetailPage extends StatelessWidget {
           children: [
             _buildCategoryHeader(context),
             const SizedBox(height: 24),
-            _buildCommonItems(),
+            _buildCommonItems(context),
             const SizedBox(height: 24),
             _buildDisposalGuidelines(context),
             const SizedBox(height: 24),
-            _buildEnvironmentalImpact(),
+            _buildEnvironmentalImpact(context),
           ],
         ),
       ),
@@ -389,10 +404,14 @@ class CategoryDetailPage extends StatelessWidget {
   }
 
   Widget _buildCategoryHeader(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final surfaceColor = isDark ? scheme.surfaceContainerHighest : scheme.surface;
     return Card(
-      elevation: 4,
+      elevation: isDark ? 10 : 4,
+      shadowColor: isDark ? Colors.black.withValues(alpha: 0.7) : null,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      color: Colors.white,
+      color: surfaceColor,
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -402,7 +421,7 @@ class CategoryDetailPage extends StatelessWidget {
               children: [
                 CircleAvatar(
                   radius: 30,
-                  backgroundColor: category.color.withOpacity(0.2),
+                  backgroundColor: category.color.withValues(alpha: 0.2),
                   child: Icon(
                     category.iconData,
                     size: 30,
@@ -423,10 +442,10 @@ class CategoryDetailPage extends StatelessWidget {
                       ),
                       Text(
                         category.title,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 22,
                           fontWeight: FontWeight.bold,
-                          color: Color(0xFF1A5269),
+                          color: scheme.primary,
                         ),
                       ),
                     ],
@@ -437,8 +456,9 @@ class CategoryDetailPage extends StatelessWidget {
             const SizedBox(height: 16),
             Text(
               category.description,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 16,
+                color: scheme.onSurface.withValues(alpha: 0.85),
               ),
             ),
           ],
@@ -447,22 +467,26 @@ class CategoryDetailPage extends StatelessWidget {
     );
   }
 
-  Widget _buildCommonItems() {
+  Widget _buildCommonItems(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final surfaceColor = isDark ? scheme.surfaceContainerHighest : scheme.surface;
     return Card(
-      elevation: 4,
+      elevation: isDark ? 10 : 4,
+      shadowColor: isDark ? Colors.black.withValues(alpha: 0.7) : null,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      color: Colors.white,
+      color: surfaceColor,
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
+            Text(
               'Common Items',
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
-                color: Color(0xFF1A5269),
+                color: scheme.primary,
               ),
             ),
             const SizedBox(height: 16),
@@ -471,9 +495,9 @@ class CategoryDetailPage extends StatelessWidget {
               runSpacing: 8,
               children: category.items.map((item) {
                 return Chip(
-                  label: Text(item),
-                  backgroundColor: category.color.withOpacity(0.1),
-                  side: BorderSide(color: category.color.withOpacity(0.3)),
+                  label: Text(item, style: TextStyle(color: scheme.onSurface)),
+                  backgroundColor: category.color.withValues(alpha: 0.1),
+                  side: BorderSide(color: category.color.withValues(alpha: 0.3)),
                 );
               }).toList(),
             ),
@@ -484,55 +508,43 @@ class CategoryDetailPage extends StatelessWidget {
   }
 
   Widget _buildDisposalGuidelines(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final surfaceColor = isDark ? scheme.surfaceContainerHighest : scheme.surface;
     return Card(
-      elevation: 4,
+      elevation: isDark ? 10 : 4,
+      shadowColor: isDark ? Colors.black.withValues(alpha: 0.7) : null,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      color: Colors.white,
+      color: surfaceColor,
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
+            Text(
               'Disposal Guidelines',
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
-                color: Color(0xFF1A5269),
+                color: scheme.primary,
               ),
             ),
             const SizedBox(height: 16),
-            _buildGuidelineStep(
-              '1',
-              'Remove personal data',
-              'For devices with storage, ensure all personal data is securely erased.',
-            ),
-            _buildGuidelineStep(
-              '2',
-              'Check with manufacturer',
-              'Many manufacturers offer take-back or recycling programs.',
-            ),
-            _buildGuidelineStep(
-              '3',
-              'Find a certified e-waste recycler',
-              'Locate a certified recycling center near you using our map.',
-            ),
-            _buildGuidelineStep(
-              '4',
-              'Handle with care',
-              'Some components may contain hazardous materials - avoid breaking them.',
-            ),
+            _buildGuidelineStep('1', 'Remove personal data', 'For devices with storage, ensure all personal data is securely erased.', scheme),
+            _buildGuidelineStep('2', 'Check with manufacturer', 'Many manufacturers offer take-back or recycling programs.', scheme),
+            _buildGuidelineStep('3', 'Find a certified e-waste recycler', 'Locate a certified recycling center near you using our map.', scheme),
+            _buildGuidelineStep('4', 'Handle with care', 'Some components may contain hazardous materials - avoid breaking them.', scheme),
             const SizedBox(height: 16),
             ElevatedButton.icon(
               onPressed: () {
                 Navigator.of(context)
                     .push(MaterialPageRoute(builder: (ctx) => EWasteMapPage()));
               },
-              icon: const Icon(Icons.map),
-              label: const Text('Find Recycling Centers Near Me'),
+              icon: Icon(Icons.map, color: scheme.onPrimary),
+              label: Text('Find Recycling Centers Near Me', style: TextStyle(color: scheme.onPrimary)),
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF1A5269),
-                foregroundColor: Colors.white,
+                backgroundColor: scheme.primary,
+                foregroundColor: scheme.onPrimary,
                 minimumSize: const Size(double.infinity, 50),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8),
@@ -545,7 +557,7 @@ class CategoryDetailPage extends StatelessWidget {
     );
   }
 
-  Widget _buildGuidelineStep(String number, String title, String description) {
+  Widget _buildGuidelineStep(String number, String title, String description, ColorScheme scheme) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 16.0),
       child: Row(
@@ -556,8 +568,8 @@ class CategoryDetailPage extends StatelessWidget {
             backgroundColor: category.color,
             child: Text(
               number,
-              style: const TextStyle(
-                color: Colors.white,
+              style: TextStyle(
+                color: scheme.onPrimary,
                 fontSize: 14,
                 fontWeight: FontWeight.bold,
               ),
@@ -570,10 +582,10 @@ class CategoryDetailPage extends StatelessWidget {
               children: [
                 Text(
                   title,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 16,
-                    color: Color(0xFF1A5269),
+                    color: scheme.primary,
                   ),
                 ),
                 const SizedBox(height: 4),
@@ -581,7 +593,7 @@ class CategoryDetailPage extends StatelessWidget {
                   description,
                   style: TextStyle(
                     fontSize: 14,
-                    color: Colors.grey[600],
+                    color: scheme.onSurface.withValues(alpha: 0.7),
                   ),
                 ),
               ],
@@ -592,29 +604,34 @@ class CategoryDetailPage extends StatelessWidget {
     );
   }
 
-  Widget _buildEnvironmentalImpact() {
+  Widget _buildEnvironmentalImpact(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final surfaceColor = isDark ? scheme.surfaceContainerHighest : scheme.surface;
     return Card(
-      elevation: 4,
+      elevation: isDark ? 10 : 4,
+      shadowColor: isDark ? Colors.black.withValues(alpha: 0.7) : null,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      color: Colors.white,
+      color: surfaceColor,
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
+            Text(
               'Environmental Impact',
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
-                color: Color(0xFF1A5269),
+                color: scheme.primary,
               ),
             ),
             const SizedBox(height: 16),
             Text(
               _getEnvironmentalImpactText(),
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 16,
+                color: scheme.onSurface.withValues(alpha: 0.85),
               ),
             ),
           ],

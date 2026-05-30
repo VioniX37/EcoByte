@@ -1,6 +1,8 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:e_waste/app/data/supabase_repository.dart';
+import 'package:e_waste/app/widgets/premium_mode_ui.dart';
+import 'package:e_waste/pages/buy_sell/product_screen.dart';
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class MyProducts extends StatefulWidget {
   const MyProducts({super.key});
@@ -10,123 +12,176 @@ class MyProducts extends StatefulWidget {
 }
 
 class _MyProductsState extends State<MyProducts> {
+  dynamic _productsChannel;
+
+  @override
+  void initState() {
+    super.initState();
+    _subscribeToRealtimeUpdates();
+  }
+
+  void _subscribeToRealtimeUpdates() {
+    _productsChannel = SupabaseRepository.client.channel('my-products-realtime')
+      ..onPostgresChanges(
+        event: PostgresChangeEvent.all,
+        schema: 'public',
+        table: 'products',
+        callback: (_) {
+          if (mounted) setState(() {});
+        },
+      )
+      ..onPostgresChanges(
+        event: PostgresChangeEvent.all,
+        schema: 'public',
+        table: 'profiles',
+        callback: (_) {
+          if (mounted) setState(() {});
+        },
+      )
+      .subscribe();
+  }
+
+  @override
+  void dispose() {
+    if (_productsChannel != null) {
+      SupabaseRepository.client.removeChannel(_productsChannel);
+    }
+    super.dispose();
+  }
+
+  Future<List<Map<String, dynamic>>> _loadProducts() async {
+    final userId = SupabaseRepository.currentUserId;
+    if (userId == null) {
+      return [];
+    }
+
+    return SupabaseRepository.fetchMyProducts(userId);
+  }
+
   @override
   Widget build(BuildContext context) {
-    final FirebaseAuth _auth = FirebaseAuth.instance;
-
-    return Scaffold(
+    final scheme = Theme.of(context).colorScheme;
+    return PremiumModeShell(
       appBar: AppBar(
-        title: Text("My Products"),
+        backgroundColor: scheme.primary,
+        foregroundColor: scheme.onPrimary,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        shape: Border(
+          bottom: BorderSide(
+            color: scheme.onPrimary.withValues(alpha: 0.22),
+          ),
+        ),
+        title: const Text('My Products'),
+        actions: [
+          IconButton(
+            onPressed: () {
+              if (mounted) setState(() {});
+            },
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Refresh my products',
+          ),
+        ],
       ),
-      body: StreamBuilder<QuerySnapshot>(
-          stream: FirebaseFirestore.instance.collection('products').snapshots(),
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return Padding(
-                padding: const EdgeInsets.all(100.0),
-                child: const Center(child: CircularProgressIndicator()),
-              ); // Show loading spinner
-            } else if (snapshot.hasError) {
-              return Center(child: Text("Error: ${snapshot.error}"));
-            } else if (!snapshot.hasData || snapshot.data == null) {
-              return const Center(child: Text("No data found"));
-            }
+      child: FutureBuilder<List<Map<String, dynamic>>>(
+        future: _loadProducts(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
 
-            var products = snapshot.data!.docs;
-            final user = _auth.currentUser;
+          if (snapshot.hasError) {
+            return Center(child: Text('Error: ${snapshot.error}'));
+          }
 
-            return Expanded(
-              child: ListView.separated(
-                itemBuilder: (context, index) {
-                  // Filter products based on selected topics
-                  bool shouldDisplay = false;
-                  if (user?.uid == products[index]['id']) {
-                    shouldDisplay = true;
-                  }
+          final products = snapshot.data ?? [];
+          if (products.isEmpty) {
+            return const Center(child: Text('No data found'));
+          }
 
-                  if (!shouldDisplay) {
-                    return SizedBox.shrink(); // Hide item if not matching
-                  }
-
-                  return Padding(
-                    padding: const EdgeInsets.all(10.0),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Card(
-                            child: Padding(
-                                padding: const EdgeInsets.all(10.0),
-                                child: Container(
-                                  height: 150,
-                                  padding: EdgeInsets.all(10),
-                                  decoration: BoxDecoration(
-                                      border: Border.all(color: Colors.black),
-                                      borderRadius: BorderRadius.circular(10)),
-                                  child: Row(
-                                    children: [
-                                      Container(
-                                        height: 120, // Increased height
-                                        width: 100,
-                                        decoration: BoxDecoration(
-                                          borderRadius:
-                                              BorderRadius.circular(8),
-                                        ),
-                                        child: Image.network(
-                                          products[index]["imageUrl"],
-                                          fit: BoxFit.cover,
-                                        ),
-                                      ),
-                                      SizedBox(width: 10),
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.center,
-                                          children: [
-                                            Text(
-                                              products[index]['name'],
-                                              style: TextStyle(
-                                                  fontWeight: FontWeight.bold,
-                                                  fontSize: 20),
-                                            ),
-                                            Text(
-                                              products[index]['description'],
-                                              maxLines: 2,
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                      Text(
-                                        "₹ ${products[index]["price"]}",
-                                        style: TextStyle(
-                                            fontSize: 20,
-                                            fontWeight: FontWeight.bold),
-                                      ),
-                                      SizedBox(width: 10),
-                                    ],
-                                  ),
-                                )),
+          return ListView.separated(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+            itemCount: products.length,
+            separatorBuilder: (context, index) => const SizedBox(height: 12),
+            itemBuilder: (context, index) {
+              final product = products[index];
+              return Row(
+                children: [
+                  Expanded(
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(22),
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (ctx) => ProductScreen(productInfo: product),
                           ),
+                        );
+                      },
+                      child: PremiumModeSurface(
+                        padding: const EdgeInsets.all(12),
+                        child: Row(
+                          children: [
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: Image.network(
+                                product['image_url'] ?? product['imageUrl'] ?? '',
+                                height: 110,
+                                width: 90,
+                                fit: BoxFit.cover,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    product['name'] ?? '',
+                                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                          fontWeight: FontWeight.w800,
+                                        ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    product['description'] ?? '',
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                        ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    '₹ ${product['price']}',
+                                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                          fontWeight: FontWeight.w800,
+                                        ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
                         ),
-                        IconButton(
-                            onPressed: () {
-                              showPopup(context, products[index].id);
-                            },
-                            icon: Icon(
-                              Icons.delete,
-                              color: Colors.red,
-                            ))
-                      ],
+                      ),
                     ),
-                  );
-                },
-                separatorBuilder: (context, index) => SizedBox(),
-                itemCount: products.length,
-              ),
-            );
-          }),
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton(
+                    onPressed: () {
+                      showPopup(context, product['id'].toString());
+                    },
+                    icon: const Icon(
+                      Icons.delete,
+                      color: Colors.red,
+                    ),
+                  ),
+                ],
+              );
+            },
+          );
+        },
+      ),
     );
   }
 
@@ -135,24 +190,25 @@ class _MyProductsState extends State<MyProducts> {
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: Text("Delete Product"),
-          content: Text("Are you sure you want to delete"),
+          title: const Text('Delete Product'),
+          content: const Text('Are you sure you want to delete'),
           actions: [
             TextButton(
               onPressed: () {
-                Navigator.pop(context); // Close the popup
+                Navigator.pop(context);
               },
-              child: Text("No"),
+              child: const Text('No'),
             ),
             TextButton(
-                onPressed: () async {
-                  Navigator.pop(context);
-                  await FirebaseFirestore.instance
-                      .collection('products')
-                      .doc(docid)
-                      .delete();
-                },
-                child: Text("Yes")),
+              onPressed: () async {
+                Navigator.pop(context);
+                await SupabaseRepository.deleteProduct(docid);
+                if (mounted) {
+                  setState(() {});
+                }
+              },
+              child: const Text('Yes'),
+            ),
           ],
         );
       },
