@@ -23,6 +23,12 @@ class _ConnectScreenState extends State<ConnectScreen> {
   dynamic _communityChannel;
   bool _showInfoPanel = false;
 
+  void _openAddPost() {
+    Navigator.of(context).push(
+      premiumPageRoute(const AddPost()),
+    );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -181,11 +187,9 @@ class _ConnectScreenState extends State<ConnectScreen> {
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () {
-          Navigator.of(context).push(
-            premiumPageRoute(const AddPost()),
-          );
-        },
+        backgroundColor: premiumPrimary,
+        foregroundColor: Colors.white,
+        onPressed: _openAddPost,
         icon: const Icon(Icons.add),
         label: const Text('Post'),
       ),
@@ -209,10 +213,19 @@ class _ConnectScreenState extends State<ConnectScreen> {
                     )
                   : const SizedBox.shrink(key: ValueKey('community-info-hidden')),
             ),
-            const Padding(
+            Padding(
               padding: EdgeInsets.fromLTRB(16, 8, 16, 0),
               child: PremiumSectionHeader(
                 title: 'Latest posts',
+                trailing: FilledButton.tonalIcon(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: premiumPrimary,
+                    foregroundColor: Colors.white,
+                  ),
+                  onPressed: _openAddPost,
+                  icon: const Icon(Icons.add),
+                  label: const Text('Post'),
+                ),
               ),
             ),
             Expanded(
@@ -277,7 +290,6 @@ class _ConnectScreenState extends State<ConnectScreen> {
 
                     return ListView.separated(
                       physics: const AlwaysScrollableScrollPhysics(),
-                      reverse: true,
                       padding: const EdgeInsets.fromLTRB(16, 10, 16, 96),
                       itemCount: messages.length,
                       separatorBuilder: (context, index) => const SizedBox(height: 12),
